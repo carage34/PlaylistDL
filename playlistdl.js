@@ -1,117 +1,62 @@
-const fs = require('fs')
-const ytdl = require('ytdl-core')
-const cheerio = require("cheerio")
-const rp = require('request-promise')
-const request = require('request')
-const readline = require('readline');
-const ffmpeg   = require('fluent-ffmpeg');
-const exec = require('child_process').exec;
-var ids = []
-var names = []
-
-function parsePage() {
-	return new Promise((resolve, reject)=> {
-	const options = {
-		uri: "https://www.youtube.com/playlist?list=PLVL1kMU8cgSN-w_QzrhYEb8ry8wNb4vvi",
-		transform: function (body) {
-		//console.log(body)
-		return cheerio.load(body)
-	}
-};
-	rp(options)
-	.then(($) => {
-		var list = $(".pl-video")
-		console.log($(list).length);
-		$(list).each(function(index) {
-			var id = $(this).attr("data-video-id")
-			var nom = $(this).attr("data-title")
-			ids.push(id)
-			names.push(nom)
-			resolve()
-			//console.log(id)
-			//console.log(index)
-
-		})
-	})
-	.catch((err) => {
-		console.log(err)
-	});
-	});
+const axios = require('axios');
+const fs = require('fs');
+const ytdl = require('ytdl-core');
+const slugify = require('slugify')
+videos = [];
+baseUrl = "https://youtube.googleapis.com/youtube/v3/playlistItems?part=snippet%2CcontentDetails&maxResults=500&playlistId=PLVL1kMU8cgSN-w_QzrhYEb8ry8wNb4vvi&key=" + process.env.API_KEY;
+characterToRemove = ["/", ":", "*", "?", "\"", "<", ">", "|", "'", " " ];
+function fetchVideosId(url) {
+    axios.get(url)
+        .then(function (response) {
+            for (const property in response.data) {
+                for (const property1 in response.data[property]) {
+                    let snippet = response.data[property][property1]['snippet'];
+                    let videoItem = {};
+                    for (item in snippet) {
+                        if (item === "title") {
+                            videoItem.title = snippet[item];
+                        }
+                    }
+                    let obj = response.data[property][property1]['contentDetails']
+                    for (item in obj) {
+                        if (item === "videoId") {
+                            //console.log(obj[item]);
+                            videoItem.id = obj[item];
+                            videos.push(videoItem);
+                        }
+                    }
+                }
+            }
+            if (response.data['nextPageToken']) {
+                fetchVideosId(baseUrl + "&pageToken=" + response.data['nextPageToken']);
+            } else {
+                downloadMusic();
+            }
+        }).catch(error => {
+            console.log(error);
+        })
 }
-let id = 'sDLsSQf3Hc0';
 
-let stream = ytdl(id, {
-  filter: 'audioonly',
-});
+function downloadMusic() {
 
-/*let start = Date.now();
-ffmpeg(stream)
-  .audioBitrate(128)
-  .save(`${__dirname}/${id}.mp3`)
-  .on('progress', (p) => {
-    readline.cursorTo(process.stdout, 0);
-    process.stdout.write(`${p.targetSize}kb downloaded`);
-  })
-  .on('end', () => {
-    console.log(`\ndone, thanks - ${(Date.now() - start) / 1000}s`);
-  });*/
+    videos.forEach(element => {
+        let title = element.title;
+        title=(title.replace(/[ &\/\\#,+()$~%.'|":*?<>{}]/g, "_"));
+        console.log(title);
+        const file = fs.createWriteStream("mp3/" + title + '.mp3');
+        file.on('error', (err) => {
+            console.log(err);
+        })
+       
+            let stream = ytdl('http://www.youtube.com/watch?v=' + element.id).on('error', (err) => {console.log(err)});
+            stream.pipe(fs.createWriteStream("mp3/" + title + '.mp3'));
+        
+       
+    });
+}
+
+fetchVideosId(baseUrl);
 
 
-parsePage().then(  function() {
-						ytdl('https://www.youtube.com/watch?v='+'BgfcToAjfdc', {filter: 'audioonly'})
-						.pipe(fs.createWriteStream("zzz"+'.mp3'));
-						ytdl.getBasicInfo("https://www.youtube.com/watch?v=BgfcToAjfdc", function (err, info) {
-							if(err) thro
-						})
 
-}).catch(function(error) {
-	console.log(error)
-})
 
-/*parsePage().then(  function() {
-						//ytdl('https://www.youtube.com/watch?v='+'BgfcToAjfdc', {filter: 'audioonly'})
-  //.pipe(fs.createWriteStream("sqsqd"+'.mp3'));
-  console.log(ids[50]);
-	for(var i=0;i<ids.length;i++) {
-		//console.log(command)
-		var name1 = names[i].replace(/[^a-zA-Z] /g, "")
-		var name2 = name1.replace(/ /g,"_");
-		ytdl.getBasicInfo("https://www.youtube.com/watch?v="+ids[i], function (err, info) {
-			if(err) {
-				console.log(err)
-			} else {
-				let start = Date.now();
-				ffmpeg(stream)
-				.audioBitrate(128)
-				.save(`${__dirname}/${name2}.mp3`)
-				.on('progress', (p) => {
-					readline.cursorTo(process.stdout, 0);
-					process.stdout.write(`${p.targetSize}kb downloaded`);
-				})
-				.on('end', () => {
-					console.log(`\ndone, thanks - ${(Date.now() - start) / 1000}s`);
-				})
-			}
-		})
-	}
-})*/
-
-parsePage().then(  function() {
-						//ytdl('https://www.youtube.com/watch?v='+'BgfcToAjfdc', {filter: 'audioonly'})
-  //.pipe(fs.createWriteStream("sqsqd"+'.mp3'));
-  console.log(ids[50]);
-	for(var i=0;i<ids.length;i++) {
-		var command = "ytdl https://www.youtube.com/watch?v="+ids[i]+ " | ffmpeg -i pipe:0 -b:a 192k -vn "+names[i]+".mp3"
-		//console.log(command)
-		console.log(names[i])
-		var name1 = names[i].replace(/[^a-zA-Z] /g, "")
-		var name2 = name1.replace(/ /g,"_");
-		console.log(name2)
-		var command = "ytdl https://www.youtube.com/watch?v="+ids[i]+ " | ffmpeg -i pipe:0 -b:a 192k -vn "+name2+".mp3"
-		exec(command, function(error, stdout, stderr) {
-			console.log('done')
-			console.log(command)
-			//console.log('stderr:', stderr);
-		})
-	}
-})
