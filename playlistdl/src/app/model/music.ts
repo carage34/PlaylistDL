@@ -8,6 +8,8 @@ export interface music {
 }
 
 export interface infos {
-    videoId: string,
-    title: string
+    videoId: string;
+    title: string;
+    duration: number;
+    fileSize: number;
 }

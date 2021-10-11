@@ -14,5 +14,10 @@ export class AppComponent {
 
   constructor(musicDownloadService: MusicDownloadService) {
     musicDownloadService.fetchMusicInfo();
+    musicDownloadService.musicInfo.forEach(el => {
+      musicDownloadService.downloadMusic(el).subscribe((data) => {
+        console.log(data);
+      });
+    });
   }
 }
